@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Appeal Lab</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="panel">
+    <section class="hero">
+      <p class="eyebrow">THE APPEAL LAB</p>
+      <h1>Read the room.</h1>
+      <p class="sub">
+        Vote, react, answer prompts, and shape the stream in real time.
+      </p>
+    </section>
+
+    <section class="lab-card">
+      <h2>Live Pulse Check</h2>
+      <p class="prompt">What does this moment need?</p>
+
+      <div class="button-grid">
+        <button data-vote="Energy">More Energy</button>
+        <button data-vote="Focus">More Focus</button>
+        <button data-vote="Chaos">More Chaos</button>
+        <button data-vote="Teach">Teach Us</button>
+      </div>
+
+      <div class="result">
+        <span>Audience Signal:</span>
+        <strong id="signal">Waiting for votes...</strong>
+      </div>
+    </section>
+
+    <section class="lab-card">
+      <h2>Creator Challenge</h2>
+      <p id="challenge">
+        Give the creator one sentence that would make this stream impossible to ignore.
+      </p>
+    </section>
+  </main>
+
+  <script src="panel.js"></script>
+</body>
+</html>
