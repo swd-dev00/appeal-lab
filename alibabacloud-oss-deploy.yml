@@ -1,0 +1,169 @@
+name: Deploy Appeal Lab to Alibaba Cloud OSS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "panel.html"
+      - "config.html"
+      - "live.html"
+      - "style.css"
+      - "panel.js"
+      - "config.js"
+      - "live.js"
+      - "README.md"
+      - "privacy.html"
+      - "terms.html"
+      - ".github/workflows/alibabacloud-oss-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Leave blank to deploy files at the OSS bucket root.
+  # Example prefix if needed: appeal-lab/
+  OSS_PREFIX: ""
+
+jobs:
+  deploy:
+    name: Deploy static Twitch extension assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Appeal Lab file structure
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUIRED_FILES=(
+            "panel.html"
+            "config.html"
+            "live.html"
+            "style.css"
+            "panel.js"
+            "live.js"
+          )
+
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Missing required file: $file"
+              exit 1
+            fi
+          done
+
+          if [ -f "index.html" ]; then
+            echo "Do not deploy index.html for Appeal Lab."
+            exit 1
+          fi
+
+          if [ -d "node_modules" ] || [ -d "dist" ] || [ -d "ebs" ]; then
+            echo "Do not deploy node_modules, dist, or ebs folders."
+            exit 1
+          fi
+
+          echo "Appeal Lab structure is clean."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Alibaba Cloud OSS SDK
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install oss2
+
+      - name: Upload Appeal Lab assets to Alibaba Cloud OSS
+        env:
+          ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ secrets.ALIBABA_CLOUD_ACCESS_KEY_ID }}
+          ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ secrets.ALIBABA_CLOUD_ACCESS_KEY_SECRET }}
+          ALIBABA_CLOUD_OSS_ENDPOINT: ${{ secrets.ALIBABA_CLOUD_OSS_ENDPOINT }}
+          ALIBABA_CLOUD_OSS_BUCKET: ${{ secrets.ALIBABA_CLOUD_OSS_BUCKET }}
+          OSS_PREFIX: ${{ env.OSS_PREFIX }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python <<'PY'
+          import mimetypes
+          import os
+          from pathlib import Path
+
+          import oss2
+
+          access_key_id = os.environ["ALIBABA_CLOUD_ACCESS_KEY_ID"]
+          access_key_secret = os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"]
+          endpoint = os.environ["ALIBABA_CLOUD_OSS_ENDPOINT"]
+          bucket_name = os.environ["ALIBABA_CLOUD_OSS_BUCKET"]
+          prefix = os.environ.get("OSS_PREFIX", "").strip().strip("/")
+
+          files = [
+              "panel.html",
+              "config.html",
+              "live.html",
+              "style.css",
+              "panel.js",
+              "live.js",
+              "README.md",
+              "privacy.html",
+              "terms.html",
+          ]
+
+          optional_files = ["config.js"]
+          files.extend([file for file in optional_files if Path(file).exists()])
+
+          auth = oss2.Auth(access_key_id, access_key_secret)
+          bucket = oss2.Bucket(auth, endpoint, bucket_name)
+
+          content_type_overrides = {
+              ".html": "text/html; charset=utf-8",
+              ".css": "text/css; charset=utf-8",
+              ".js": "application/javascript; charset=utf-8",
+              ".md": "text/markdown; charset=utf-8",
+              ".png": "image/png",
+              ".jpg": "image/jpeg",
+              ".jpeg": "image/jpeg",
+              ".svg": "image/svg+xml",
+          }
+
+          uploaded = []
+
+          for file_name in files:
+              path = Path(file_name)
+              if not path.exists():
+                  continue
+
+              object_key = f"{prefix}/{file_name}" if prefix else file_name
+              suffix = path.suffix.lower()
+              content_type = content_type_overrides.get(
+                  suffix,
+                  mimetypes.guess_type(file_name)[0] or "application/octet-stream",
+              )
+
+              headers = {
+                  "Content-Type": content_type,
+                  "Cache-Control": "no-cache, no-store, must-revalidate",
+              }
+
+              bucket.put_object_from_file(object_key, str(path), headers=headers)
+              uploaded.append(object_key)
+
+          print("Uploaded Appeal Lab assets:")
+          for item in uploaded:
+              print(f"- oss://{bucket_name}/{item}")
+          PY
+
+      - name: Print Twitch path reminder
+        shell: bash
+        run: |
+          echo "Twitch Asset Hosting paths:"
+          echo "Panel Viewer Path: panel.html"
+          echo "Config Path: config.html"
+          echo "Live Config Path: live.html"
+          echo "Panel Height: 360"
